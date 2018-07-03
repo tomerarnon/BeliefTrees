@@ -79,6 +79,7 @@ class Node {
         float angle, r;
         PVector offset;
 
+        // Set the distance of this node from its parent
         // r = this.size;// * this.size / 10;
         r = this.parent.size;
         // r = 0;
@@ -88,11 +89,13 @@ class Node {
 
 
 
-        // angle is the allotted angle for each sibling node. For increasing levels, a smaller portion of a full circle is allocated
+        // angle is the allotted angle for each sibling node. For increasing levels,
+        // a smaller portion of a full circle is allotted for all the siblings.
+        // The vector grandparent --> parent is used to adjust the angle
+        // in the direction of "inertia"
         angle = TWO_PI / (this.parent.nchild * (this.level-1));
         angle *= (this.n - parent.nchild/2.0 + 0.5);
 
-        // push the position in the direction of "inertia"
         if (this.parent.parent != null) {
             PVector diff = PVector.sub(this.parent.pos, this.parent.parent.pos);
 
