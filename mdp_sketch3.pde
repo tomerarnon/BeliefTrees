@@ -4,10 +4,11 @@ import processing.pdf.*;
 
 ArrayList<Node> nodes = new ArrayList<Node>();
 
-final int back = 20;  // background tint
+final int back = 0;  // background tint
 float wf, hf; // width and height factors for display circle.
 float dist;
 float startSize;
+float rotation;
 
 boolean record = false;     // produces pdf; mapped to "r" key.
 boolean border = true;      // cicular border; "b" key
@@ -23,6 +24,7 @@ void setup() {
     hf = 0.98 * height;
     dist = (float) width / 1400;
     startSize = (float) width / 30;
+    rotation = 0;
 
     // read json
     String jsonfile = "data/" + file + ".json";
@@ -37,6 +39,11 @@ void setup() {
 }
 
 void draw() {
+
+    pushMatrix();
+    translate(width/2, height/2);
+    rotate(rotation);
+    translate(-width/2, -height/2);
 
     if (record)
         beginRecord(PDF, safeFilename("images/pomdpsketch_" + file, "pdf"));
@@ -76,6 +83,7 @@ void draw() {
         println("saved");
     }
 
+    popMatrix();
     noLoop();
 }
 
@@ -83,12 +91,16 @@ void keyPressed() {
 
     if (key == CODED){
 
-        if      (keyCode == DOWN) startSize -= 0.5;
-        else if (keyCode == UP)   startSize += 0.5;
-
-        nodes.get(0).size = startSize;
-        for (int i = 1; i < nodes.size(); i++)
-            nodes.get(i).setSize(startSize);
+        if (keyCode == DOWN){
+            startSize -= 0.5;
+            recursiveSetSize(nodes.get(0), startSize);
+        }
+        else if (keyCode == UP){
+            startSize += 0.5;
+            recursiveSetSize(nodes.get(0), startSize);
+        }
+        else if (keyCode == LEFT)   rotation -= PI/6;
+        else if (keyCode == RIGHT)  rotation += PI/6;
     }
     else{
         switch(key){
@@ -160,8 +172,7 @@ void cramNodes(){
 
     dist -= 0.01;
 
-    for(int i = 1; i < nodes.size(); i++)
-        nodes.get(i).setPosition();
+    recursiveSetPosition(nodes.get(0));
 }
 
 
@@ -210,8 +221,10 @@ ArrayList<Node> populateTree(int [][] children){
 
 void recursiveAssignChildren(ArrayList<Node> nodesTree, int[][] children, int i){
 
+    // assign this node's children
     nodesTree.get(i).assignChildren(nodesTree, children[i]);
 
+    // iterate over the indices of the children and recurse
     for (int j : children[i]){
         nodesTree.get(j).setParameters();
         recursiveAssignChildren(nodesTree, children, j);

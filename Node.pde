@@ -285,3 +285,11 @@ void recursiveSetHue(Node parent){
         recursiveSetHue(child);
     }
 }
+
+void recursiveSetSize(Node parent, float size){
+
+    for (Node child : parent.children){
+        child.setSize(size);
+        recursiveSetSize(child, size);
+    }
+}
