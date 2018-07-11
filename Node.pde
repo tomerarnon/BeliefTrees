@@ -83,7 +83,7 @@ class Node {
 
         r = this.parent.size;
         r += this.size;
-        // r += random(0, this.size);
+        r += random(0, this.size);
         // r += random(0, 40*dist);
 
         // angle is the allotted angle for each sibling node. For increasing levels,
