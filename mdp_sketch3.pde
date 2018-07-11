@@ -4,31 +4,35 @@ import processing.pdf.*;
 
 ArrayList<Node> nodes = new ArrayList<Node>();
 
-final int back = 10;  // background tint
+final int back = 20;  // background tint
+float wf, hf; // width and height factors for display circle.
 float dist;
 float startSize;
-
-int [][] children; // from the json. Each element is an array representing the children of the index node.
 
 boolean record = false;     // produces pdf; mapped to "r" key.
 boolean border = true;      // cicular border; "b" key
 boolean showInds = false;   // for debug; "i" key
 boolean mustFit = true;     // nodes must fit in circle. "f" key
 
-String file = "baby";  // filename with no folder or extension for image-naming purposes
-// String file = "gridworld";
+// String file = "baby";  // filename with no folder or extension for image-naming purposes
+String file = "tiger";
 
 void setup() {
     size(800, 800);
+    wf = 0.98 * width;
+    hf = 0.98 * height;
     dist = (float) width / 1400;
     startSize = (float) width / 30;
 
     // read json
     String jsonfile = "data/" + file + ".json";
-    children = childrenFromJSON(jsonfile);
-    decrement(children, 1); // from 1 to 0 based indexing
+    int[][] children = childrenFromJSON(jsonfile);
+    increment(children, -1); // from 1 to 0 based indexing
 
     nodes = populateTree(children);
+
+    if (isCyclic(children))
+        println("NOTE: THIS GRAPH CONTAINS CYCLES!!");
 
 }
 
@@ -42,7 +46,7 @@ void draw() {
     if (mustFit){
         // reset the random distance factor to the default,
         // then check if it should be decreased to allow all the nodes to fit
-        // break if computation exceeds 2 seconds to avoid inifinite loop case
+        // break if computation exceeds 2 seconds to avoid infinite loop case
         dist = (float) width / 1400;
         int start = millis();
         while (!allFit() && (millis() - start < 2000))
@@ -52,16 +56,19 @@ void draw() {
     if (border){
         noFill();
         stroke(255-back);
-        ellipse(width/2, height/2, width*0.98, height*0.98);
+        ellipse(width/2, height/2, wf, hf);
     }
 
 
     for (Node n : nodes) n.connect(); // lines first
     for (Node n : nodes) n.show();    // glows second
 
-    if (showInds)
+    if (showInds){
+        fill(255 - back);
         for (int i = 0; i < nodes.size(); i++)
             nodes.get(i).showInd(i);
+
+    }
 
     if (record) {
         endRecord();
@@ -87,19 +94,19 @@ void keyPressed() {
         switch(key){
 
             case ' ': // spacebar
-                for (Node n : nodes) n.setPosition();
+                recursiveSetPosition(nodes.get(0));
                 break;
 
             case 's':
 
-                saveFrame("images/POMDP_###.png");
+                saveFrame(safeFilename("images/pomdpsketch_" + file, "png"));
                 println("saved");
                 break;
 
             case 'c':
 
                 nodes.get(0).randomHue();
-                for (Node n : nodes) n.setHue();
+                recursiveSetHue(nodes.get(0));
                 break;
 
             case 'b':
@@ -127,10 +134,23 @@ void keyPressed() {
 }
 
 
+void mousePressed(){
+
+    for (Node n : nodes){
+
+        n.selected = false;
+
+        if (n.mouseOver())
+            n.selected = true;
+    }
+
+    redraw();
+}
+
 boolean allFit(){
 
     for(int i = nodes.size() -1; i >= 0; i--)
-        if (nodes.get(i).outOfBounds(0.98, 0.98))
+        if (nodes.get(i).outOfBounds(wf, hf))
             return false;
 
     return true;
@@ -158,9 +178,10 @@ String safeFilename(String prefix, String extension) {
         filename += savecnt + "." + extension;
 
         // Check to see if file exists, using the undocumented
-        // savePath() to find sketch folder
+        // savePath() to find sketch folder.
+        // Break when file doesn't already exist
         f = new File(savePath(filename));
-        if(!f.exists())  // File doesn't exist
+        if(!f.exists())
             break;
 
         savecnt++;
@@ -182,15 +203,21 @@ ArrayList<Node> populateTree(int [][] children){
     for (int i = 0; i < children.length; i++)
         nodesTree.add(new Node(width/2, height/2, startSize));
 
-    for (int i = 0; i < children.length; i++)
-        nodesTree.get(i).assignChildren(nodesTree, children[i]);
-
-    for (int i = 0; i < children.length; i++)
-        nodesTree.get(i).setParameters();
-
+    recursiveAssignChildren(nodesTree, children, 0);
 
     return nodesTree;
 }
+
+void recursiveAssignChildren(ArrayList<Node> nodesTree, int[][] children, int i){
+
+    nodesTree.get(i).assignChildren(nodesTree, children[i]);
+
+    for (int j : children[i]){
+        nodesTree.get(j).setParameters();
+        recursiveAssignChildren(nodesTree, children, j);
+    }
+}
+
 
 int[][] childrenFromJSON(String filename){
 
@@ -224,20 +251,19 @@ int[][] childrenFromJSON(String filename){
 }
 
 
-void decrement(int[][] A, int val){
+void increment(int[][] A, int val){
 
     for (int i = 0; i < A.length; i++)
-        decrement(A[i], val);
-
+        increment(A[i], val);
 }
 
-void decrement(int[] A, int val){
+void increment(int[] A, int val){
 
     for (int i = 0; i < A.length; i++)
-        A[i] -= val;
+        A[i] += val;
 }
 
-// Converts Arraylist<Interger to int[]
+// Converts Arraylist<Integer> to int[]
 // There is definitely definitely a library function for this
 int[] toIntArray(ArrayList<Integer> integers) {
     int[] ints = new int[integers.size()];

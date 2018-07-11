@@ -10,13 +10,16 @@ class Node {
     int level;            // how deep in the tree
     int hue;
 
+    boolean selected = false;
+
     Node(float x, float y, float size_) {
         this.pos = new PVector(x, y);
         this.size = size_;
-        this.level = 1;
+        this.level = 0;
 
         this.nchild = 0;
         this.hue = 0; //round(random(0, 360));
+        this.children = new Node[0];
     }
 
     void assignParent(Node parent_, int n_){
@@ -46,16 +49,18 @@ class Node {
 
     void setParameters(){
 
-        setSize(0); //dummy value
+        setSize(startSize); //dummy value
         setPosition(); // parent based
         setHue();      // parent based
     }
 
     void setHue(){
 
-        if (this.parent != null)
-            this.hue = (this.parent.hue + round(random(20)))%255;
-    }
+        if (this.parent != null){
+                this.hue = this.parent.hue + round(random(20));
+                this.hue %= 255;
+            }
+        }
 
     void randomHue(){
         this.hue = round(random(0, 360));
@@ -64,9 +69,7 @@ class Node {
     void setSize(float s){
 
         if (this.parent == null) this.size = s;
-        // else                     this.size = this.parent.size / 1.5;
-        // else                     this.size = sqrt(this.parent.size) * 1.5;
-        else                     this.size = pow(this.parent.size, 0.9);
+        else                     this.size = pow(this.parent.size, 0.95);
     }
 
 
@@ -77,23 +80,17 @@ class Node {
 
 
         float angle, r;
-        PVector offset;
 
-        // Set the distance of this node from its parent
-        // r = this.size;// * this.size / 10;
         r = this.parent.size;
-        // r = 0;
-        // r += 10*random(dist, 6*dist);
-        r += random(this.size, 2*this.size);
-        r += 10*random(0, 4*dist);
-
-
+        r += this.size;
+        // r += random(0, this.size);
+        // r += random(0, 40*dist);
 
         // angle is the allotted angle for each sibling node. For increasing levels,
         // a smaller portion of a full circle is allotted for all the siblings.
         // The vector grandparent --> parent is used to adjust the angle
-        // in the direction of "inertia"
-        angle = TWO_PI / (this.parent.nchild * (this.level-1));
+        // in the direction of "inertia" to set the overall trend
+        angle = TWO_PI / (this.parent.nchild * (this.level));
         angle *= (this.n - parent.nchild/2.0 + 0.5);
 
         if (this.parent.parent != null) {
@@ -102,39 +99,39 @@ class Node {
             angle += diff.heading();
         }
 
-        offset = PVector.fromAngle(angle);
-        offset.mult(r);
+        PVector offset = PVector.fromAngle(angle).mult(r);
         this.pos = PVector.add(this.parent.pos, offset);
     }
 
-    // check whether in a bounding ellipse with proportions to width/height
-    boolean outOfBounds(float xf, float yf){
+    boolean outOfBounds(float xProp, float yProp){
+        // check whether the node is inside a centered bounding ellipse proportional to width/height
+        // out of bounds condition: (x/a)^2 + (y/b)^2 > 1
 
-        float rx = xf*width/2;
-        float ry = yf*height/2;
+        // normalize and translate to center:
+        float x = this.pos.x/width  - 0.5;
+        float y = this.pos.y/height - 0.5;
 
-        float relx = this.pos.x - width/2;
-        float rely = this.pos.y - height/2;
+        // note that xProp is the x-diameter of the ellipse,so
+        // xProp/2 is the constant `a` in the above equation
+        x /= (0.5 * xProp);
+        y /= (0.5 * yProp);
 
-        relx /= rx;
-        rely /= ry;
-
-
-        return relx*relx + rely*rely > 1;
+        return x*x + y*y > 1;
     }
 
     void show() {
         colorMode(HSB);
-        fill(this.hue, 255, 255, 3); // consider writing a shader to do the fade just right
+        fill(this.hue, 255, 255, 3);
         noStroke();
 
         float rad;
-        // float s = pow(this.size, 0.25);
         for (float r = 0.05; r < 1.5; r *= 1.05) {
-            // rad = 20 * r * s;
             rad = this.size * r;
             ellipse(this.pos.x, this.pos.y, rad, rad);
         }
+
+        if (this.selected)
+            showSelected();
     }
 
     void connect() {
@@ -149,13 +146,142 @@ class Node {
     // debug
     void showInd(int n){
 
-        stroke(255 - back, 255);
-        fill(255 - back);
         textSize(14);
 
         pushMatrix();
         translate(this.pos.x, this.pos.y);
         text(n, 0, 0);
         popMatrix();
+    }
+
+    boolean mouseOver(){
+
+        return (abs(mouseX - this.pos.x) < this.size) &&
+               (abs(mouseY - this.pos.y) < this.size);
+    }
+
+    void arrow(){
+
+        stroke(255 - back);
+        fill(255 - back);
+        strokeWeight(1);
+
+        PVector diff;
+        for (Node child : this.children){
+
+            line(this.pos.x, this.pos.y, child.pos.x, child.pos.y);
+            diff = PVector.sub(child.pos, this.pos);
+
+            pushMatrix();
+            translate(child.pos.x, child.pos.y);
+            rotate(diff.heading() - HALF_PI);
+            triangle(0, 0, -4, -6, 4, -6);
+
+            popMatrix();
+        }
+    }
+
+    void showSelected(){
+
+        markSelected();
+        for (Node child : this.children){
+            child.markSelected();
+        }
+
+        arrow();
+    }
+
+    void markSelected(){
+
+        // recolor the node to anti-background
+        fill(255-back, 150);
+        stroke(back);
+
+        ellipse(this.pos.x, this.pos.y, this.size, this.size);
+        // mark with a cross
+        line(this.pos.x - 10, this.pos.y,      this.pos.x + 10,  this.pos.y);
+        line(this.pos.x,      this.pos.y - 10, this.pos.x,       this.pos.y + 10);
+
+    }
+
+} // Node end
+
+
+// return longest path to a leaf node.
+int treeHeight(Node root, int n){
+
+    if (root.children.length == 0)  // leaf node
+        return n;
+
+    // compute height of each subtree and keep the maximum.
+    int h = 0;
+    int temp_h = 0;
+
+    for (Node child : root.children){
+
+        temp_h = treeHeight(child, n + 1);
+
+        h = (temp_h > h) ? temp_h : h;
+    }
+
+    return h;
+}
+
+int treeHeight(Node root){
+    return treeHeight(root, 1);
+}
+
+
+
+boolean isCyclicUtil(int i, boolean[] visited, boolean[] recStack, int[][] adj){
+
+    if (recStack[i]) return true;
+    if (visited[i])  return false;
+
+    // Mark the current node as visited and
+    // part of recursion stack
+    visited[i]  = true;
+    recStack[i] = true;
+
+    for (int child : adj[i]){
+        if (isCyclicUtil(child, visited, recStack, adj))
+            return true;
+    }
+
+    recStack[i] = false;
+
+    return false;
+}
+
+boolean isCyclic(int[][] adj) {
+
+    // Mark all the vertices as not visited and
+    // not part of recursion stack
+    boolean[] visited  = new boolean[adj.length];
+    boolean[] recStack = new boolean[adj.length];
+
+    // Call the recursive isCyclicUtil function
+    for (int i = 0; i < adj.length; i++){
+        if (isCyclicUtil(i, visited, recStack, adj))
+            return true;
+    }
+
+    return false;
+}
+
+void recursiveSetPosition(Node parent){
+
+    for (Node child : parent.children){
+        child.setPosition();
+        recursiveSetPosition(child);
+    }
+
+}
+
+void recursiveSetHue(Node parent){
+
+    for (Node child : parent.children){
+        child.setHue();
+        recursiveSetHue(child);
     }
 }
