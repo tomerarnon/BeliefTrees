@@ -2,23 +2,38 @@ class Node {
 
     Node parent = null;
     Node [] children;
-    int nchild;           //how many children does this node have
+    int nchild = 0;           //how many children does this node have
+    int N;
+    float V;
 
     PVector pos;
     float size;
     int n;                // which of its parent's children is this one
-    int level;            // how deep in the tree
+    int level = 0;            // how deep in the tree
     int hue;
+    color col;
+    float edgethick;        // edge thickness
 
     boolean selected = false;
 
-    Node(float x, float y, float size_) {
-        this.pos = new PVector(x, y);
-        this.size = size_;
-        this.level = 0;
+    // Node(float x, float y, float size_) {
+    //     this.pos = new PVector(x, y);
+    //     this.size = size_;
+    //     this.level = 0;
 
-        this.nchild = 0;
-        this.hue = 0; //round(random(0, 360));
+    //     this.nchild = 0;
+    //     this.hue = 0; //round(random(0, 360));
+    //     this.children = new Node[0];
+    // }
+    Node(float x, float y, int _N, float _V) {
+        this.pos = new PVector(x, y);
+
+        this.N = _N;
+        this.V = _V;
+
+        this.edgethick = map(this.N, minN, maxN, 1, 5);
+        this.hue = round(map(this.V, minV, maxV, hue1, hue2));
+        this.col = lerpColor(col1, col2, (this.V - minV) / (maxV - minV));
         this.children = new Node[0];
     }
 
@@ -50,8 +65,7 @@ class Node {
     void setParameters(){
 
         setSize(startSize); //dummy value
-        setPosition(); // parent based
-        setHue();      // parent based
+        setPosition();      // parent based
     }
 
     void setHue(){
@@ -59,12 +73,11 @@ class Node {
         if (this.parent != null){
                 this.hue = this.parent.hue + round(random(20));
                 this.hue %= 255;
-            }
         }
-
-    void randomHue(){
-        this.hue = round(random(0, 360));
     }
+
+    void setHue(int h){ this.hue = h; }
+    void randomHue(){ this.hue = round(random(0, 360)); }
 
     void setSize(float s){
 
@@ -82,15 +95,17 @@ class Node {
         float angle, r;
 
         r = this.parent.size;
-        r += this.size;
-        r += random(0, this.size);
+        // r += random(0, this.size/2);
+
+        float levelOffset = min(100, this.level / 4);
+        r += random(sqrt(this.level)-1, sqrt(this.level) * this.size/4);
         // r += random(0, 40*dist);
 
         // angle is the allotted angle for each sibling node. For increasing levels,
         // a smaller portion of a full circle is allotted for all the siblings.
         // The vector grandparent --> parent is used to adjust the angle
         // in the direction of "inertia" to set the overall trend
-        angle = TWO_PI / (this.parent.nchild * (this.level));
+        angle = TWO_PI / (this.parent.nchild * pow(this.level, 0.9));
         angle *= (this.n - parent.nchild/2.0 + 0.5);
 
         if (this.parent.parent != null) {
@@ -104,15 +119,16 @@ class Node {
     }
 
     boolean outOfBounds(float xProp, float yProp){
-        // check whether the node is inside a centered bounding ellipse proportional to width/height
-        // out of bounds condition: (x/a)^2 + (y/b)^2 > 1
+        // check whether the node is inside a centered bounding ellipse
+        // proportional to width/height out of bounds condition:
+        // (x/a)^2 + (y/b)^2 > 1
 
         // normalize and translate to center:
         float x = this.pos.x/width  - 0.5;
         float y = this.pos.y/height - 0.5;
 
-        // note that xProp is the x-diameter of the ellipse,so
-        // xProp/2 is the constant `a` in the above equation
+        // note that xProp is the x-diameter of the ellipse, so
+        // 0.5*xProp is the constant `a` in the ellipse equation
         x /= (0.5 * xProp);
         y /= (0.5 * yProp);
 
@@ -120,9 +136,8 @@ class Node {
     }
 
     void show() {
-        colorMode(HSB);
-        fill(this.hue, 255, 255, 3);
-        noStroke();
+        // fill(this.hue, 255, 255, 3);
+        fill(this.col);
 
         float rad;
         for (float r = 0.05; r < 1.5; r *= 1.05) {
@@ -136,8 +151,7 @@ class Node {
 
     void connect() {
 
-        stroke(255-back, 50);
-        strokeWeight(0.5);
+        strokeWeight(this.edgethick / min(2, this.level + 1));
         for (Node child : this.children){
             line(this.pos.x, this.pos.y, child.pos.x, child.pos.y);
         }

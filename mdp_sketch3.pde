@@ -9,29 +9,45 @@ float wf, hf; // width and height factors for display circle.
 float dist;
 float startSize;
 float rotation;
+int minN, maxN, hue1, hue2;
+float minV, maxV;
+color col1, col2;
+
 
 boolean record = false;     // produces pdf; mapped to "r" key.
-boolean border = true;      // cicular border; "b" key
+boolean border = false;      // circular border; "b" key
 boolean showInds = false;   // for debug; "i" key
 boolean mustFit = true;     // nodes must fit in circle. "f" key
 
-// String file = "baby";  // filename with no folder or extension for image-naming purposes
-String file = "tiger";
+String file = "baby2";  // filename with no folder or extension for image-naming purposes
+// String file = "tiger";
 
 void setup() {
-    size(800, 800);
+    size(700, 700);
     wf = 0.98 * width;
     hf = 0.98 * height;
     dist = (float) width / 1400;
-    startSize = (float) width / 30;
+    startSize = (float) width / 15;
     rotation = 0;
 
     // read json
     String jsonfile = "data/" + file + ".json";
-    int[][] children = childrenFromJSON(jsonfile);
+    JSONObject json = loadJSONObject(jsonfile);
+    int[][] children = childrenFromJSON(json);
     increment(children, -1); // from 1 to 0 based indexing
+    float [] Vs = jsonToFloat(json.getJSONArray("V"));
+    int [] Ns = jsonToInt(json.getJSONArray("N"));
 
-    nodes = populateTree(children);
+    minN = min(Ns); maxN = max(Ns);
+    minV = min(Vs); maxV = max(Vs);
+
+    // hue1 = 0;
+    // hue2 = 300;
+
+    col1 = color(36, 224, 69, 3);
+    col2 = color(70, 26, 142, 3);
+
+    nodes = populateTree(children, Ns, Vs);
 
     if (isCyclic(children))
         println("NOTE: THIS GRAPH CONTAINS CYCLES!!");
@@ -50,15 +66,15 @@ void draw() {
 
     background(back);
 
-    if (mustFit){
-        // reset the random distance factor to the default,
-        // then check if it should be decreased to allow all the nodes to fit
-        // break if computation exceeds 2 seconds to avoid infinite loop case
-        dist = (float) width / 1400;
-        int start = millis();
-        while (!allFit() && (millis() - start < 2000))
-            cramNodes();
-    }
+    // if (mustFit){
+    //     // reset the random distance factor to the default,
+    //     // then check if it should be decreased to allow all the nodes to fit
+    //     // break if computation exceeds 2 seconds to avoid infinite loop case
+    //     dist = (float) width / 1400;
+    //     int start = millis();
+    //     while (!allFit() && (millis() - start < 2000))
+    //         cramNodes();
+    // }
 
     if (border){
         noFill();
@@ -67,8 +83,18 @@ void draw() {
     }
 
 
-    for (Node n : nodes) n.connect(); // lines first
-    for (Node n : nodes) n.show();    // glows second
+    // lines first
+    stroke(255-back, 50);
+    for (Node n : nodes){
+        n.connect();
+    }
+
+    // glows second
+    noStroke();
+    colorMode(HSB);
+    for (Node n : nodes){
+        n.show();
+    }
 
     if (showInds){
         fill(255 - back);
@@ -148,13 +174,18 @@ void keyPressed() {
 
 void mousePressed(){
 
-    for (Node n : nodes){
+    // for (Node n : nodes){
 
-        n.selected = false;
+    //     n.selected = false;
 
-        if (n.mouseOver())
-            n.selected = true;
-    }
+    //     if (n.mouseOver())
+    //         n.selected = true;
+    // }
+
+    Node root = nodes.get(0);
+    root.pos = new PVector(mouseX, mouseY);
+
+    recursiveSetPosition(root);
 
     redraw();
 }
@@ -183,8 +214,8 @@ String safeFilename(String prefix, String extension) {
 
     while (true) {
         filename = prefix;
-        if     (savecnt < 10)  filename += "00";
-        else if(savecnt < 100) filename +=  "0";
+        if     (savecnt < 10)  filename += "_00";
+        else if(savecnt < 100) filename +=  "_0";
 
         filename += savecnt + "." + extension;
 
@@ -202,17 +233,20 @@ String safeFilename(String prefix, String extension) {
 }
 
 
-ArrayList<Node> populateTree(int [][] children){
+ArrayList<Node> populateTree(int [][] children, int[] Ns, float[] Vs){
 
-    // super inefficient function that does 3 separate passes over the array for safety's sake;
-    // 1. do an initialization pass for the nodes
-    // 2. assign parent-child relationships once all nodes exist
-    // 3. set parameters once all relationships are set
+    // First create "blank" nodes
+    // then assign parent-children relationships
+    // recursively down the tree
 
     ArrayList<Node> nodesTree = new ArrayList<Node>(children.length);
 
-    for (int i = 0; i < children.length; i++)
-        nodesTree.add(new Node(width/2, height/2, startSize));
+    for (int i = 0; i < children.length; i++){
+
+        Node n = new Node(width/2, height/2, Ns[i], Vs[i]);
+        nodesTree.add(n);
+
+    }
 
     recursiveAssignChildren(nodesTree, children, 0);
 
@@ -222,19 +256,20 @@ ArrayList<Node> populateTree(int [][] children){
 void recursiveAssignChildren(ArrayList<Node> nodesTree, int[][] children, int i){
 
     // assign this node's children
-    nodesTree.get(i).assignChildren(nodesTree, children[i]);
+    Node n = nodesTree.get(i);
+    n.assignChildren(nodesTree, children[i]);
+    n.setParameters();
+
 
     // iterate over the indices of the children and recurse
     for (int j : children[i]){
-        nodesTree.get(j).setParameters();
         recursiveAssignChildren(nodesTree, children, j);
     }
 }
 
 
-int[][] childrenFromJSON(String filename){
+int[][] childrenFromJSON(JSONObject json){
 
-    JSONObject json = loadJSONObject(filename);
     JSONArray  arrayOfArrays  = json.getJSONArray("children");
 
     int[][] fullarray = new int[arrayOfArrays.size()][];
@@ -263,6 +298,24 @@ int[][] childrenFromJSON(String filename){
     return fullarray;
 }
 
+float[] jsonToFloat(JSONArray arr){
+
+    float[] floatarr = new float[arr.size()];
+    for (int i = 0; i < arr.size(); i++) {
+        floatarr[i] = arr.getFloat(i);
+    }
+
+    return floatarr;
+}
+int[] jsonToInt(JSONArray arr){
+
+    int[] intarr = new int[arr.size()];
+    for (int i = 0; i < arr.size(); i++) {
+        intarr[i] = arr.getInt(i);
+    }
+
+    return intarr;
+}
 
 void increment(int[][] A, int val){
 
