@@ -1,12 +1,10 @@
 
 import processing.pdf.*;
 
-
-ArrayList<Node> nodes = new ArrayList<Node>();
+Tree tree;
 
 final int back = 0;  // background tint
 float wf, hf; // width and height factors for display circle.
-float dist;
 float startSize;
 float rotation;
 int minN, maxN, hue1, hue2;
@@ -15,39 +13,43 @@ color col1, col2;
 
 
 boolean record = false;     // produces pdf; mapped to "r" key.
-boolean border = false;      // circular border; "b" key
+boolean border = false;     // circular border; "b" key
 boolean showInds = false;   // for debug; "i" key
-boolean mustFit = true;     // nodes must fit in circle. "f" key
+boolean simple  = true;     // faster rendering but ugly, "p" key
 
-String file = "baby2";  // filename with no folder or extension for image-naming purposes
-// String file = "tiger";
+
+String file = "baby3";  // filename with no folder or extension for image-naming purposes
+// String file = "tiger2";
 
 void setup() {
     size(700, 700);
     wf = 0.98 * width;
     hf = 0.98 * height;
-    dist = (float) width / 1400;
     startSize = (float) width / 15;
-    rotation = 0;
+    rotation = PI;
 
     // read json
     String jsonfile = "data/" + file + ".json";
     JSONObject json = loadJSONObject(jsonfile);
-    int[][] children = childrenFromJSON(json);
-    increment(children, -1); // from 1 to 0 based indexing
-    float [] Vs = jsonToFloat(json.getJSONArray("V"));
-    int [] Ns = jsonToInt(json.getJSONArray("N"));
 
-    minN = min(Ns); maxN = max(Ns);
-    minV = min(Vs); maxV = max(Vs);
+    int [][] children = childrenFromJSON(json);
+    float [] Vs       = jsonToFloat(json.getJSONArray("V"));
+    int []   Ns       = jsonToInt(json.getJSONArray("N"));
+
+    minN = min(Ns);
+    maxN = max(Ns);
+    minV = min(Vs);
+    maxV = max(Vs);
 
     // hue1 = 0;
     // hue2 = 300;
 
-    col1 = color(36, 224, 69, 3);
-    col2 = color(70, 26, 142, 3);
+    col2 = color(236, 224, 69);
+    col1 = color(255, 86, 82);
 
-    nodes = populateTree(children, Ns, Vs);
+    increment(children, -1); // from 1 to 0 based indexing
+
+    tree = new Tree(children, Ns, Vs);
 
     if (isCyclic(children))
         println("NOTE: THIS GRAPH CONTAINS CYCLES!!");
@@ -56,25 +58,17 @@ void setup() {
 
 void draw() {
 
-    pushMatrix();
-    translate(width/2, height/2);
-    rotate(rotation);
-    translate(-width/2, -height/2);
-
     if (record)
         beginRecord(PDF, safeFilename("images/pomdpsketch_" + file, "pdf"));
 
-    background(back);
+    pushMatrix();
 
-    // if (mustFit){
-    //     // reset the random distance factor to the default,
-    //     // then check if it should be decreased to allow all the nodes to fit
-    //     // break if computation exceeds 2 seconds to avoid infinite loop case
-    //     dist = (float) width / 1400;
-    //     int start = millis();
-    //     while (!allFit() && (millis() - start < 2000))
-    //         cramNodes();
-    // }
+    translate(tree.root.pos.x, tree.root.pos.y);
+    rotate(rotation);
+    translate(-tree.root.pos.x, -tree.root.pos.y);
+
+
+    background(back);
 
     if (border){
         noFill();
@@ -85,21 +79,19 @@ void draw() {
 
     // lines first
     stroke(255-back, 50);
-    for (Node n : nodes){
-        n.connect();
-    }
+    tree.connect();
 
     // glows second
     noStroke();
     colorMode(HSB);
-    for (Node n : nodes){
-        n.show();
-    }
+    if (simple) tree.showSimple();
+    else        tree.show();
+
 
     if (showInds){
         fill(255 - back);
-        for (int i = 0; i < nodes.size(); i++)
-            nodes.get(i).showInd(i);
+        for (int i = 0; i < tree.nodes.size(); i++)
+            tree.nodes.get(i).showInd(i);
 
     }
 
@@ -118,12 +110,12 @@ void keyPressed() {
     if (key == CODED){
 
         if (keyCode == DOWN){
-            startSize -= 0.5;
-            recursiveSetSize(nodes.get(0), startSize);
+            startSize -= 5;
+            tree.setSize(startSize);
         }
         else if (keyCode == UP){
-            startSize += 0.5;
-            recursiveSetSize(nodes.get(0), startSize);
+            startSize += 5;
+            tree.setSize(startSize);
         }
         else if (keyCode == LEFT)   rotation -= PI/6;
         else if (keyCode == RIGHT)  rotation += PI/6;
@@ -132,7 +124,7 @@ void keyPressed() {
         switch(key){
 
             case ' ': // spacebar
-                recursiveSetPosition(nodes.get(0));
+                tree.setPosition();
                 break;
 
             case 's':
@@ -143,8 +135,8 @@ void keyPressed() {
 
             case 'c':
 
-                nodes.get(0).randomHue();
-                recursiveSetHue(nodes.get(0));
+                tree.root.randomHue();
+                tree.setHue();
                 break;
 
             case 'b':
@@ -161,9 +153,9 @@ void keyPressed() {
                 showInds = !showInds;
                 break;
 
-            case 'f':
+            case 'p':
 
-                mustFit = !mustFit;
+                simple = !simple;
                 break;
         }
     }
@@ -174,36 +166,10 @@ void keyPressed() {
 
 void mousePressed(){
 
-    // for (Node n : nodes){
-
-    //     n.selected = false;
-
-    //     if (n.mouseOver())
-    //         n.selected = true;
-    // }
-
-    Node root = nodes.get(0);
-    root.pos = new PVector(mouseX, mouseY);
-
-    recursiveSetPosition(root);
+    tree.root.pos = new PVector(mouseX, mouseY);
+    tree.setPosition();
 
     redraw();
-}
-
-boolean allFit(){
-
-    for(int i = nodes.size() -1; i >= 0; i--)
-        if (nodes.get(i).outOfBounds(wf, hf))
-            return false;
-
-    return true;
-}
-
-void cramNodes(){
-
-    dist -= 0.01;
-
-    recursiveSetPosition(nodes.get(0));
 }
 
 
@@ -230,41 +196,6 @@ String safeFilename(String prefix, String extension) {
     }
 
     return filename;
-}
-
-
-ArrayList<Node> populateTree(int [][] children, int[] Ns, float[] Vs){
-
-    // First create "blank" nodes
-    // then assign parent-children relationships
-    // recursively down the tree
-
-    ArrayList<Node> nodesTree = new ArrayList<Node>(children.length);
-
-    for (int i = 0; i < children.length; i++){
-
-        Node n = new Node(width/2, height/2, Ns[i], Vs[i]);
-        nodesTree.add(n);
-
-    }
-
-    recursiveAssignChildren(nodesTree, children, 0);
-
-    return nodesTree;
-}
-
-void recursiveAssignChildren(ArrayList<Node> nodesTree, int[][] children, int i){
-
-    // assign this node's children
-    Node n = nodesTree.get(i);
-    n.assignChildren(nodesTree, children[i]);
-    n.setParameters();
-
-
-    // iterate over the indices of the children and recurse
-    for (int j : children[i]){
-        recursiveAssignChildren(nodesTree, children, j);
-    }
 }
 
 

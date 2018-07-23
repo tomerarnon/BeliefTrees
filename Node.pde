@@ -32,8 +32,10 @@ class Node {
         this.V = _V;
 
         this.edgethick = map(this.N, minN, maxN, 1, 5);
-        this.hue = round(map(this.V, minV, maxV, hue1, hue2));
-        this.col = lerpColor(col1, col2, (this.V - minV) / (maxV - minV));
+        // this.hue = round(map(this.V, minV, maxV, hue1, hue2));
+
+        float amt = (this.V - minV) / (maxV - minV);  // 1 when V = maxV, 0 when V = minV
+        this.col = lerpColor(col1, col2, amt);       // col2 when amt = 1
         this.children = new Node[0];
     }
 
@@ -60,6 +62,16 @@ class Node {
                 this.children[n] = child;
             }
         }
+    }
+    void assignChildren(Node[] children){
+
+        this.nchild = children.length;
+        // this.children = new Node[this.nchild];
+        this.children = children;
+
+        for (int n = 0; n  < this.nchild; n++)
+            this.children[n].assignParent(this, n);
+
     }
 
     void setParameters(){
@@ -98,8 +110,7 @@ class Node {
         // r += random(0, this.size/2);
 
         float levelOffset = min(100, this.level / 4);
-        r += random(sqrt(this.level)-1, sqrt(this.level) * this.size/4);
-        // r += random(0, 40*dist);
+        r += random(0, sqrt(this.level) * this.size/4);
 
         // angle is the allotted angle for each sibling node. For increasing levels,
         // a smaller portion of a full circle is allotted for all the siblings.
@@ -137,10 +148,11 @@ class Node {
 
     void show() {
         // fill(this.hue, 255, 255, 3);
-        fill(this.col);
+
+        fill(this.col, max(1, 10/(sqrt(this.level) + 1)));
 
         float rad;
-        for (float r = 0.05; r < 1.5; r *= 1.05) {
+        for (float r = 0.05; r < 1.1; r *= 1.03) {
             rad = this.size * r;
             ellipse(this.pos.x, this.pos.y, rad, rad);
         }
@@ -155,6 +167,14 @@ class Node {
         for (Node child : this.children){
             line(this.pos.x, this.pos.y, child.pos.x, child.pos.y);
         }
+    }
+
+    void showSimple(){
+
+        fill(this.col, 100);
+        ellipse(this.pos.x, this.pos.y, this.size, this.size);
+
+        if(this.selected) showSelected();
     }
 
     // debug
@@ -221,29 +241,127 @@ class Node {
 } // Node end
 
 
-// return longest path to a leaf node.
-int treeHeight(Node root, int n){
+
+
+
+
+
+
+
+
+
+class Tree {
+
+    Node root;
+    ArrayList<Node> nodes;
+
+
+    Tree(ArrayList<Node> nodeTree){
+        this.nodes = nodeTree;
+        this.root = this.nodes.get(0);
+    }
+
+    Tree(int [][] children, int[] Ns, float[] Vs){
+
+        // First create "blank" nodes
+        // then assign parent-children relationships
+        // recursively down the tree
+
+        this.nodes = new ArrayList<Node>(children.length);
+
+        for (int i = 0; i < children.length; i++)
+            this.nodes.add(new Node(width/2, height/2, Ns[i], Vs[i]));
+
+
+        recursiveAssignChildren(children, 0);
+
+        this.root = this.nodes.get(0);
+
+        this.setPosition();
+        this.setHue();
+        this.setSize(startSize);
+    }
+
+    void recursiveAssignChildren(int[][] children, int i){
+
+        // get the i'th node's children
+        int[] child_inds = children[i];
+        Node[] childNodes = new Node[child_inds.length];
+        int l = 0;
+        for(int k : child_inds)
+            childNodes[l++] = this.nodes.get(k);
+
+        // assign the i'th node's children
+        Node n = this.nodes.get(i);
+        n.assignChildren(childNodes);
+        n.setParameters();
+
+        // iterate over the children of the children and recurse
+        for (int j : children[i]){
+            recursiveAssignChildren(children, j);
+        }
+    }
+
+
+    // return longest path to a leaf node.
+    int height(Node root, int n){
 
     if (root.children.length == 0)  // leaf node
         return n;
 
-    // compute height of each subtree and keep the maximum.
-    int h = 0;
-    int temp_h = 0;
+        // compute height of each subtree and keep the maximum.
+        int h = 0;
+        int temp_h = 0;
 
-    for (Node child : root.children){
+        for (Node child : root.children){
 
-        temp_h = treeHeight(child, n + 1);
+            temp_h = height(child, n + 1);
 
-        h = (temp_h > h) ? temp_h : h;
+            h = (temp_h > h) ? temp_h : h;
+        }
+
+        return h;
     }
 
-    return h;
-}
+    int height(){
+        return height(this.root, 1);
+    }
 
-int treeHeight(Node root){
-    return treeHeight(root, 1);
-}
+
+    void setPosition(){ recursiveSetPosition(this.root); }
+    void setHue(){      recursiveSetHue(this.root); }
+    void setSize(float size){     recursiveSetSize(this.root, size); }
+
+    void recursiveSetPosition(Node parent){
+        for (Node child : parent.children){
+            child.setPosition();
+            recursiveSetPosition(child);
+        }
+
+    }
+
+    void recursiveSetHue(Node parent){
+
+        for (Node child : parent.children){
+            child.setHue();
+            recursiveSetHue(child);
+        }
+    }
+
+    void recursiveSetSize(Node parent, float size){
+
+        parent.setSize(size);
+
+        for (Node child : parent.children){
+            recursiveSetSize(child, size);
+        }
+    }
+
+    void connect(){    for (Node n : this.nodes) n.connect(); }
+    void show(){       for (Node n : this.nodes) n.show(); }
+    void showSimple(){ for (Node n : this.nodes) n.showSimple(); }
+
+} // Tree end
 
 
 
@@ -281,29 +399,4 @@ boolean isCyclic(int[][] adj) {
     }
 
     return false;
-}
-
-void recursiveSetPosition(Node parent){
-
-    for (Node child : parent.children){
-        child.setPosition();
-        recursiveSetPosition(child);
-    }
-
-}
-
-void recursiveSetHue(Node parent){
-
-    for (Node child : parent.children){
-        child.setHue();
-        recursiveSetHue(child);
-    }
-}
-
-void recursiveSetSize(Node parent, float size){
-
-    for (Node child : parent.children){
-        child.setSize(size);
-        recursiveSetSize(child, size);
-    }
 }
