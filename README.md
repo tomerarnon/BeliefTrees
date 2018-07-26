@@ -9,12 +9,15 @@
 
 2. Keybindings
 
-- `r`          - save pdf
-- `s`          - save png
-- `b`          - draw circle border
-- `c`          - choose new seed color
-- `i`          - show indices of nodes (for degbugging)
-- `p`          - toggle between simplified drawing and nice drawing
-- `spacebar`   - recalculate node positions
-- `up arrow`   - increase root node size
-- `down arrow` - decrease root node size
+- `r`                 - save pdf
+- `s`                 - save png
+- `b`                 - draw circle border
+- `c`                 - choose new seed color
+- `i`                 - show indices of nodes (for degbugging)
+- `p`                 - toggle between simplified drawing and nice drawing
+- `w/q`               - increase/decrease branching angle
+- `spacebar`          - recalculate node positions
+- `up/down arrow`     - increase/decrease node size
+- `left/right arrow`  - rotate
+
+- `left mouse button` - move root of tree.
