@@ -10,7 +10,6 @@ class Node {
     float size;
     int n;                // which of its parent's children is this one
     int level = 0;            // how deep in the tree
-    int hue;
     color col;
     float edgethick;        // edge thickness
 
@@ -22,7 +21,6 @@ class Node {
     //     this.level = 0;
 
     //     this.nchild = 0;
-    //     this.hue = 0; //round(random(0, 360));
     //     this.children = new Node[0];
     // }
     Node(float x, float y, int _N, float _V) {
@@ -32,10 +30,8 @@ class Node {
         this.V = _V;
 
         this.edgethick = map(this.N, minN, maxN, 1, 5);
-        // this.hue = round(map(this.V, minV, maxV, hue1, hue2));
 
-        float amt = (this.V - minV) / (maxV - minV);  // 1 when V = maxV, 0 when V = minV
-        this.col = lerpColor(col1, col2, amt);       // col2 when amt = 1
+        setCol();
         this.children = new Node[0];
     }
 
@@ -80,23 +76,17 @@ class Node {
         setPosition();      // parent based
     }
 
-    void setHue(){
-
-        if (this.parent != null){
-                this.hue = this.parent.hue + round(random(20));
-                this.hue %= 255;
-        }
-    }
-
-    void setHue(int h){ this.hue = h; }
-    void randomHue(){ this.hue = round(random(0, 360)); }
-
     void setSize(float s){
 
         if (this.parent == null) this.size = s;
         else                     this.size = pow(this.parent.size, 0.95);
     }
 
+    void setCol(){
+        // col1 when node value is low, col2 when high.
+        float amt = (this.V - minV) / (maxV - minV);  // 1 when V = maxV, 0 when V = minV
+        this.col = lerpColor(col1, col2, amt);
+    }
 
     void setPosition() {
 
@@ -108,15 +98,15 @@ class Node {
 
         r = this.parent.size;
         // r += random(0, this.size/2);
+        r += (noise(this.N + this.V + this.level) * sqrt(this.level) * this.size/4);
 
-        float levelOffset = min(100, this.level / 4);
-        r += random(0, sqrt(this.level) * this.size/4);
+        /*  angle is the allotted angle for each sibling node. For increasing levels,
+            a smaller portion of a full circle is allotted for all the siblings.
+            The vector grandparent --> parent is used to adjust the angle
+            in the direction of "inertia" to set the overall trend
+        */
 
-        // angle is the allotted angle for each sibling node. For increasing levels,
-        // a smaller portion of a full circle is allotted for all the siblings.
-        // The vector grandparent --> parent is used to adjust the angle
-        // in the direction of "inertia" to set the overall trend
-        angle = TWO_PI / (this.parent.nchild * pow(this.level, 0.9));
+        angle = TWO_PI / (this.parent.nchild * pow(this.level, branchingAngle));
         angle *= (this.n - parent.nchild/2.0 + 0.5);
 
         if (this.parent.parent != null) {
@@ -131,7 +121,7 @@ class Node {
 
     boolean outOfBounds(float xProp, float yProp){
         // check whether the node is inside a centered bounding ellipse
-        // proportional to width/height out of bounds condition:
+        // proportional to width/height. Out of bounds condition:
         // (x/a)^2 + (y/b)^2 > 1
 
         // normalize and translate to center:
@@ -147,9 +137,9 @@ class Node {
     }
 
     void show() {
-        // fill(this.hue, 255, 255, 3);
 
-        fill(this.col, max(1, 10/(sqrt(this.level) + 1)));
+        fill(this.col, max(1, 15/(sqrt(this.level) + 1)));
+        // fill(this.col, 10);
 
         float rad;
         for (float r = 0.05; r < 1.1; r *= 1.03) {
@@ -270,16 +260,16 @@ class Tree {
         this.nodes = new ArrayList<Node>(children.length);
 
         for (int i = 0; i < children.length; i++)
-            this.nodes.add(new Node(width/2, height/2, Ns[i], Vs[i]));
+            this.nodes.add(new Node(0.5*width, 0.55*height, Ns[i], Vs[i]));
 
 
         recursiveAssignChildren(children, 0);
 
         this.root = this.nodes.get(0);
 
-        this.setPosition();
-        this.setHue();
         this.setSize(startSize);
+        this.setPosition();
+
     }
 
     void recursiveAssignChildren(int[][] children, int i){
@@ -292,9 +282,7 @@ class Tree {
             childNodes[l++] = this.nodes.get(k);
 
         // assign the i'th node's children
-        Node n = this.nodes.get(i);
-        n.assignChildren(childNodes);
-        n.setParameters();
+        this.nodes.get(i).assignChildren(childNodes);
 
         // iterate over the children of the children and recurse
         for (int j : children[i]){
@@ -329,7 +317,6 @@ class Tree {
 
 
     void setPosition(){ recursiveSetPosition(this.root); }
-    void setHue(){      recursiveSetHue(this.root); }
     void setSize(float size){     recursiveSetSize(this.root, size); }
 
     void recursiveSetPosition(Node parent){
@@ -338,14 +325,6 @@ class Tree {
             recursiveSetPosition(child);
         }
 
-    }
-
-    void recursiveSetHue(Node parent){
-
-        for (Node child : parent.children){
-            child.setHue();
-            recursiveSetHue(child);
-        }
     }
 
     void recursiveSetSize(Node parent, float size){

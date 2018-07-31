@@ -3,14 +3,15 @@ import processing.pdf.*;
 
 Tree tree;
 
-final int back = 0;  // background tint
+int back = 0;  // background tint
 float wf, hf; // width and height factors for display circle.
 float startSize;
 float rotation;
 int minN, maxN, hue1, hue2;
 float minV, maxV;
 color col1, col2;
-
+int seed = 0;
+float branchingAngle = 1.0;   // factor that determines branching (bigger for wider branches, 'q'/'w' keys).
 
 boolean record = false;     // produces pdf; mapped to "r" key.
 boolean border = false;     // circular border; "b" key
@@ -25,7 +26,7 @@ void setup() {
     size(700, 700);
     wf = 0.98 * width;
     hf = 0.98 * height;
-    startSize = (float) width / 15;
+    startSize = (float) height / 15 * 3/4;
     rotation = PI;
 
     // read json
@@ -41,11 +42,27 @@ void setup() {
     minV = min(Vs);
     maxV = max(Vs);
 
-    // hue1 = 0;
-    // hue2 = 300;
+    // red/yellow
+    col1 = color(235, 254, 100);
+    col2 = color(200, 26, 22);
 
-    col2 = color(236, 224, 69);
-    col1 = color(255, 86, 82);
+    // teal/yellow
+    // col2 = color(60, 235, 235);
+    // col1 = color(225, 110, 2);
+
+    // purple/yellow
+    // col2 = color(90, 90, 235);
+    // col1 = color(245, 225, 0);
+    // col1 = color(225, 225, 150);
+
+    // col2 = color(255);
+    // col1 = color(0, 150, 150);
+
+    // dark theme
+    // col2 = color(70, 44, 109);
+    // col1 = color(10, 10, 10);
+    // col1 = color(255, 44, 109);
+    // col2 = color(10, 10, 10);
 
     increment(children, -1); // from 1 to 0 based indexing
 
@@ -59,33 +76,34 @@ void setup() {
 void draw() {
 
     if (record)
-        beginRecord(PDF, safeFilename("images/pomdpsketch_" + file, "pdf"));
+        beginRecord(PDF, safeFilename("images/pdf/" + file, "pdf"));
+
+    background(back);
 
     pushMatrix();
+
+    if (border){
+        noFill();
+        strokeWeight(0.5);
+        stroke(255-back, 100);
+        ellipse(width/2, height/2, wf, hf);
+    }
+
 
     translate(tree.root.pos.x, tree.root.pos.y);
     rotate(rotation);
     translate(-tree.root.pos.x, -tree.root.pos.y);
 
-
-    background(back);
-
-    if (border){
-        noFill();
-        stroke(255-back);
-        ellipse(width/2, height/2, wf, hf);
-    }
-
-
     // lines first
-    stroke(255-back, 50);
+    stroke(255-back, 30);
     tree.connect();
 
     // glows second
     noStroke();
-    colorMode(HSB);
-    if (simple) tree.showSimple();
-    else        tree.show();
+    if (simple)
+        tree.showSimple();
+    else
+        tree.show();
 
 
     if (showInds){
@@ -102,7 +120,7 @@ void draw() {
     }
 
     popMatrix();
-    noLoop();
+    // noLoop();
 }
 
 void keyPressed() {
@@ -117,26 +135,35 @@ void keyPressed() {
             startSize += 5;
             tree.setSize(startSize);
         }
-        else if (keyCode == LEFT)   rotation -= PI/6;
-        else if (keyCode == RIGHT)  rotation += PI/6;
+        else if (keyCode == LEFT)   rotation -= PI/64;
+        else if (keyCode == RIGHT)  rotation += PI/64;
     }
     else{
         switch(key){
 
             case ' ': // spacebar
+                noiseSeed(++seed);
                 tree.setPosition();
                 break;
 
             case 's':
 
-                saveFrame(safeFilename("images/pomdpsketch_" + file, "png"));
-                println("saved");
+                // saveFrame(safeFilename("images/png/" + file, "png"));
+                String bk = "";
+                if (back == 255)
+                    bk = "wht";
+                String cols = hex(col1)+"_"+hex(col2);
+                String name = "images/png/" + file + "_" + cols + bk + ".png";
+                saveFrame(name);
+                println("saved", name);
                 break;
 
             case 'c':
 
-                tree.root.randomHue();
-                tree.setHue();
+                col1 = color(random(255), random(255), random(255));
+                col2 = color(random(255), random(255), random(255));
+                for (Node n : tree.nodes)
+                    n.setCol();
                 break;
 
             case 'b':
@@ -157,10 +184,26 @@ void keyPressed() {
 
                 simple = !simple;
                 break;
+
+            case 'q':
+
+            branchingAngle += 0.05;
+            tree.setPosition();
+            break;
+
+            case 'w':
+
+            branchingAngle -= 0.05;
+            tree.setPosition();
+            break;
+
+            case 'g':
+                back = 255 - back;
+                break;
         }
     }
      
-    redraw();
+    // redraw();
 }
 
 
